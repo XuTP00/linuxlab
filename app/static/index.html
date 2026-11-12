@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LinuxLab — курс по Linux</title>
+<link rel="stylesheet" href="/static/vendor/xterm.css">
+<link rel="stylesheet" href="/static/css/app.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐧</text></svg>">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="logo">⌨</span>
+    <span class="brand-name">Linux<b>Lab</b></span>
+    <span class="version">v0.01</span>
+  </div>
+
+  <div class="progress-block">
+    <div class="progress-info">
+      <span id="progress-label">Загрузка курса…</span>
+      <span id="progress-percent">0%</span>
+    </div>
+    <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+  </div>
+
+  <div class="topbar-actions">
+    <button class="btn ghost" id="btn-tasks" title="Список заданий">Задания</button>
+    <button class="btn ghost" id="btn-layout" title="Переключить раскладку панелей">⇅ Раскладка</button>
+    <button class="btn ghost" id="btn-reset-container" title="Пересоздать контейнер">⟳ Контейнер</button>
+    <button class="btn ghost danger" id="btn-reset-progress" title="Сбросить прогресс">Сброс</button>
+  </div>
+</header>
+
+<div class="drawer" id="drawer">
+  <div class="drawer-head">
+    <span>Программа курса</span>
+    <button class="btn icon" id="btn-close-drawer">✕</button>
+  </div>
+  <div class="drawer-body" id="drawer-body"></div>
+</div>
+<div class="overlay" id="overlay"></div>
+
+<div class="modal" id="unlock-modal" hidden>
+  <div class="modal-card">
+    <div class="modal-title">Разблокировать копирование</div>
+    <p class="modal-text">По умолчанию текст заданий копировать нельзя — команды вводятся руками.
+    Введите пароль администратора, чтобы временно разрешить копирование.</p>
+    <input type="password" id="unlock-pass" placeholder="пароль администратора" autocomplete="off">
+    <div class="modal-error" id="unlock-error" hidden>Неверный пароль — копирование остаётся заблокированным</div>
+    <div class="modal-actions">
+      <button class="btn" id="unlock-cancel">Отмена</button>
+      <button class="btn primary" id="unlock-ok">Разблокировать</button>
+    </div>
+  </div>
+</div>
+
+<main class="workbench layout-v" id="workbench">
+
+  <section class="panel task-panel">
+    <div class="copy-notice" id="copy-notice">Копирование недоступно — введите команды в терминале вручную</div>
+    <div class="panel-head">
+      <div class="crumbs" id="crumbs">—</div>
+      <div class="panel-head-right">
+        <button class="btn lock-badge" id="btn-unlock" title="Команды из задания вводятся вручную. Нажмите, чтобы разрешить копирование (нужен пароль администратора)">🔒 <b>вводите вручную</b></button>
+        <span class="points" id="task-points"></span>
+        <span class="difficulty" id="task-difficulty"></span>
+      </div>
+    </div>
+    <div class="panel-body">
+      <h1 class="task-title" id="task-title">Выберите задание</h1>      <div class="task-text" id="task-text">
+        <p>Откройте список заданий слева и выберите первое.</p>
+      </div>
+      <div class="theory" id="task-theory" hidden>
+        <div class="theory-head">💡 Теория</div>
+        <div class="theory-body" id="theory-body"></div>
+      </div>
+      <div class="goals" id="task-goals"></div>
+
+      <div class="checks" id="checks"></div>
+
+      <div class="hint-box" id="hint-box" hidden>
+        <div class="hint-head">Подсказки</div>
+        <ol id="hints-list"></ol>
+      </div>
+
+      <div class="solution-box" id="solution-box" hidden>
+        <div class="hint-head">Решение</div>
+        <pre id="solution-text"></pre>
+      </div>
+    </div>
+    <div class="panel-foot">
+      <button class="btn primary" id="btn-check">Проверить</button>
+      <button class="btn" id="btn-hint">Подсказка</button>
+      <button class="btn" id="btn-solution">Решение</button>
+      <button class="btn ghost" id="btn-prev">← Назад</button>
+      <button class="btn ghost" id="btn-next">Далее →</button>
+      <span class="check-status" id="check-status"></span>
+    </div>
+  </section>
+
+  <div class="splitter" id="splitter"></div>
+
+  <section class="panel term-panel">
+    <div class="panel-head">
+      <div class="crumbs">
+        <span class="dot" id="term-dot"></span>
+        <span id="term-title">Терминал</span>
+        <span class="hint-keys">Ctrl+C — прервать · ↑/↓ — история · Ctrl+L — очистить</span>
+      </div>
+      <div class="panel-head-right">
+        <span class="badge" id="term-hint">student@linuxlab</span>
+        <button class="btn icon" id="btn-clear" title="Очистить экран">⌫</button>
+      </div>
+    </div>
+    <div class="term-wrap">
+      <div id="terminal"></div>
+      <div class="term-hint" id="term-hint-line">Кликните по терминалу и печатайте — <b>Tab</b> дополняет, <b>↑/↓</b> история, <b>Ctrl+C</b> прерывает</div>
+    </div>
+  </section>
+
+</main>
+
+<script src="/static/vendor/xterm.js"></script>
+<script src="/static/vendor/addon-fit.js"></script>
+<script src="/static/js/app.js"></script>
+</body>
+</html>

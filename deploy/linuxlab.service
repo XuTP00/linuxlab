@@ -1,0 +1,24 @@
+[Unit]
+Description=LinuxLab — практический курс по Linux (веб-сервис)
+Documentation=https://localhost/linuxlab
+After=network-online.target docker.service
+Requires=docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=mike
+Group=mike
+WorkingDirectory=/opt/linuxlab
+Environment="LINUXLAB_DATA=/var/lib/linuxlab"
+Environment="LINUXLAB_IMAGE=linuxlab/lab:latest"
+Environment="LINUXLAB_ADMIN_PASSWORD=1541685"
+Environment="LINUXLAB_UNLOCK_TTL=28800"
+Environment="PYTHONUNBUFFERED=1"
+ExecStart=/opt/linuxlab/venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8080 --workers 1 --proxy-headers
+Restart=always
+RestartSec=3
+TimeoutStopSec=20
+
+[Install]
+WantedBy=multi-user.target

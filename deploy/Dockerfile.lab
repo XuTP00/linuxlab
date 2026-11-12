@@ -1,0 +1,82 @@
+FROM ubuntu:26.04
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    LANG=C.UTF-8 \
+    TZ=UTC
+
+# Ubuntu-образ по умолчанию вырезает man-страницы и документацию.
+# Убираем исключение, чтобы `man ls` / `man grep` работали как в обычной системе.
+RUN rm -f /etc/dpkg/dpkg.cfg.d/excludes /etc/dpkg/dpkg.cfg.d/docker-* \
+    && rm -rf /etc/dpkg/dpkg.cfg.d/excludes.d
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        bash bash-completion coreutils findutils grep sed gawk diffutils \
+        procps psmisc iproute2 iputils-ping dnsutils netcat-openbsd \
+        curl wget less tree file xxd nano vim-tiny git \
+        cron at sudo acl libcap2-bin lsof rsync unzip zip jq bc \
+        python3 python3-pip openssh-client openssh-server \
+        man-db manpages locales tzdata systemd systemd-resolved ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# --- пользователь student ---
+RUN useradd -m -s /bin/bash student \
+    && echo 'student:student' | chpasswd \
+    && usermod -aG sudo student \
+    && echo 'student ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/student \
+    && chmod 0440 /etc/sudoers.d/student
+
+# --- интерактивный bash ---
+RUN printf '%s\n' \
+'# LinuxLab interactive bash' \
+'export PS1="\[\e[1;32m\]student@linuxlab\[\e[0m\]:\[\e[1;34m\]\w\[\e[0m\]\$ "' \
+'export TERM=xterm-256color' \
+'export PAGER=less' \
+'export LESS=-R' \
+'umask 022' \
+'set +m' \
+'HISTFILE=~/.bash_history' \
+'HISTSIZE=5000' \
+'HISTCONTROL=ignoreboth' \
+'shopt -s histappend' \
+'alias ll="ls -al"' \
+'alias la="ls -a"' \
+'alias l="ls -CF"' \
+'if [ -f /etc/bash_completion ]; then . /etc/bash_completion; fi' \
+> /etc/lab.bashrc && chmod 644 /etc/lab.bashrc
+
+# --- ssh-сервер для практики ---
+RUN mkdir -p /var/run/sshd /root/.ssh \
+    && ssh-keygen -A \
+    && printf 'PermitRootLogin yes\nPasswordAuthentication yes\nPubkeyAuthentication yes\n' \
+       > /etc/ssh/sshd_config.d/lab.conf \
+    && printf 'Host *\n    StrictHostKeyChecking no\n    UserKnownHostsFile /dev/null\n' \
+       > /etc/ssh/ssh_config.d/lab.conf \
+    && chmod 600 /root/.ssh 2>/dev/null || true
+
+COPY entrypoint.sh /usr/local/bin/lab-entrypoint.sh
+RUN chmod +x /usr/local/bin/lab-entrypoint.sh \
+    && su student -c 'git config --global user.email student@linuxlab' \
+    && su student -c 'git config --global user.name student' \
+    && su student -c 'git config --global init.defaultBranch main'
+
+# --- восстанавливаем man-страницы coreutils и «настоящий» man вместо заглушки ---
+RUN apt-get update -qq \
+    && apt-get install -y -qq --reinstall gnu-coreutils man-db >/dev/null 2>&1 || true
+RUN rm -f /usr/bin/man \
+    && cp /usr/bin/man.REAL /usr/bin/man \
+    && chmod 0755 /usr/bin/man \
+    && (dpkg-divert --remove --no-rename /usr/bin/man >/dev/null 2>&1 || true) \
+    && mandb >/dev/null 2>&1 || true
+# страницы GNU coreutils лежат как gnucp.1.gz — переименовываем в привычные cp.1.gz
+RUN for d in /usr/share/man/man*; do \
+        [ -d "$d" ] || continue; \
+        ( cd "$d" && for f in gnu*.1.gz gnu*.3.gz gnu*.5.gz gnu*.8.gz; do \
+            [ -e "$f" ] || continue; \
+            cp -n "$f" "${f#gnu}" 2>/dev/null || true; \
+            rm -f "$f"; \
+        done ) ; \
+    done \
+    && mandb >/dev/null 2>&1 || true
+
+WORKDIR /home/student
+CMD ["/usr/local/bin/lab-entrypoint.sh"]
