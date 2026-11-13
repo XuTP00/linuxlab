@@ -63,7 +63,7 @@
     });
     state.fit = new FitAddon.FitAddon();
     state.term.loadAddon(state.fit);
-    state.term.open($("terminal"));
+    state.term.open($("term-host"));
 
     // каждое нажатие клавиши уходит в контейнер как в настоящей консоли
     state.term.onData((data) => {
@@ -74,6 +74,7 @@
     setTimeout(() => { try { state.fit.fit(); } catch (e) {} }, 50);
     state.term.focus();
     document.addEventListener("click", (ev) => {
+      if (ev.target.closest("#view-ide")) return;   // в IDE фокус принадлежит редактору
       if (ev.target.closest(".term-panel")) state.term.focus();
     });
     window.addEventListener("resize", () => { try { state.fit.fit(); } catch (e) {} });
@@ -99,8 +100,8 @@
     const ws = new WebSocket(`${proto}://${location.host}/ws/${state.sessionId}`);
     state.ws = ws;
     ws.onopen = () => {
-      $("term-dot").classList.add("on");
-      $("term-title").textContent = "Терминал · контейнер активен";
+      const dot = document.querySelector(".term-tab[data-view='term']");
+      if (dot) dot.innerHTML = '<span style="color:var(--accent)">●</span> &gt;_ Terminal';
       if (state.pending.length) {
         state.pending.forEach((d) => ws.send(JSON.stringify({ type: "input", data: d })));
         state.pending = [];
@@ -108,8 +109,8 @@
       state.term.focus();
     };
     ws.onclose = () => {
-      $("term-dot").classList.remove("on");
-      $("term-title").textContent = "Терминал · переподключение…";
+      const dot = document.querySelector(".term-tab[data-view='term']");
+      if (dot) dot.innerHTML = "&gt;_ Terminal";
       setTimeout(() => { if (state.sessionId) connectWs(); }, 2000);
     };
     ws.onmessage = (ev) => {
@@ -144,6 +145,343 @@
     } else {
       state.pending.push(data);
     }
+  }
+
+  /* ---------------- IDE ---------------- */
+  const ide = {
+    tree: [],
+    open: [],          // [{path, name, lang, dirty}]
+    editor: null,
+    active: null,
+    expanded: new Set(),
+  };
+
+  function initIde() {
+    // CodeMirror
+    ide.editor = CodeMirror($("ide-editor"), {
+      mode: "text/plain",
+      lineNumbers: true,
+      indentUnit: 4,
+      tabSize: 4,
+      indentWithTabs: false,
+      lineWrapping: false,
+      theme: "dark",
+      extraKeys: {
+        "Ctrl-S": () => saveActiveFile(),
+        "Ctrl-Enter": () => runActiveFile(),
+        Tab: (cm) => {
+          if (cm.somethingSelected()) cm.indentSelection("add");
+          else cm.replaceSelection("    ");
+        },
+      },
+    });
+    ide.editor.setValue("");
+
+    $("ide-refresh").onclick = () => loadIdeTree();
+    $("ide-new-file").onclick = () => ideCreate("file");
+    $("ide-new-folder").onclick = () => ideCreate("folder");
+    $("ide-panel-toggle").onclick = () => $("ide-panel").classList.toggle("collapsed");
+    $("ide-panel-close").onclick = () => $("ide-panel").classList.add("collapsed");
+    $("ide-panel").querySelectorAll(".ide-panel-tab").forEach((t) => {
+      t.addEventListener("click", () => {
+        $("ide-panel").querySelectorAll(".ide-panel-tab").forEach((x) => x.classList.remove("active"));
+        t.classList.add("active");
+        if (t.textContent.trim() === "ТЕРМИНАЛ") $("ide-panel").classList.remove("collapsed");
+      });
+    });
+    loadIdeTree();
+  }
+
+  async function loadIdeTree() {
+    const box = $("ide-tree");
+    if (!state.sessionId) { box.innerHTML = '<div class="ide-tree-empty">нет сессии</div>'; return; }
+    box.innerHTML = '<div class="ide-tree-empty">загрузка…</div>';
+    try {
+      const r = await api(`/api/ide/${state.sessionId}/tree`);
+      ide.tree = r.items || [];
+      renderIdeTree();
+    } catch (e) {
+      box.innerHTML = `<div class="ide-tree-empty">ошибка: ${e.message}</div>`;
+    }
+  }
+
+  function renderIdeTree() {
+    const box = $("ide-tree");
+    box.innerHTML = "";
+    if (!ide.tree.length) {
+      box.innerHTML = '<div class="ide-tree-empty">папка пуста</div>';
+      return;
+    }
+    const root = "/home/student";
+    const rows = [];
+    function walk(items, depth) {
+      items.forEach((it) => {
+        const full = it.path;
+        const rel = full.startsWith(root) ? full.slice(root.length) : full;
+        const isOpen = ide.expanded.has(full);
+        if (it.type === "dir") {
+          rows.push({ it, depth, isOpen });
+          if (isOpen) {
+            const kids = ide.tree.filter((x) => x.path.startsWith(full + "/") && x.path.slice(full.length + 1).indexOf("/") === -1);
+            walk(kids, depth + 1);
+          }
+        } else {
+          rows.push({ it, depth, isOpen: false });
+        }
+      });
+    }
+    const top = ide.tree.filter((x) => x.path.slice(root.length + 1).indexOf("/") === -1);
+    walk(top, 0);
+    rows.forEach(({ it, depth, isOpen }) => {
+      const row = document.createElement("div");
+      row.className = "ide-tree-row" + (ide.active === it.path ? " sel" : "");
+      row.style.paddingLeft = 8 + depth * 12 + "px";
+      row.title = it.path;
+      row.innerHTML = `<span class="ico">${it.type === "dir" ? (isOpen ? "▾" : "▸") : "📄"}</span>` +
+        `<span class="nm">${escapeHtml(it.name)}</span>` +
+        (it.type === "file" ? `<span class="sz">${it.size}</span>` : "");
+      row.onclick = () => {
+        if (it.type === "dir") {
+          if (ide.expanded.has(it.path)) ide.expanded.delete(it.path);
+          else ide.expanded.add(it.path);
+          renderIdeTree();
+        } else {
+          openIdeFile(it.path);
+        }
+      };
+      row.oncontextmenu = (ev) => {
+        ev.preventDefault();
+        ideFileMenu(it, ev);
+      };
+      box.appendChild(row);
+    });
+  }
+
+  async function openIdeFile(path) {
+    if (!state.sessionId) return;
+    try {
+      const f = await api(`/api/ide/${state.sessionId}/file?path=${encodeURIComponent(path)}`);
+      const tab = ide.open.find((t) => t.path === path);
+      const model = { path: f.path, name: f.name, lang: f.lang, dirty: false };
+      if (tab) Object.assign(tab, model);
+      else ide.open.push(model);
+      ide.active = path;
+      $("ide-welcome").style.display = "none";
+      const mode = f.lang || "text/plain";
+      ide.editor.setOption("mode", mode);
+      ide.editor.setValue(f.binary ? "  [двоичный файл — редактирование недоступно]" : f.content);
+      ide.editor.clearHistory();
+      renderIdeTabs();
+      ide.editor.focus();
+      $("ide-save-state").textContent = "открыт " + f.name;
+    } catch (e) {
+      $("ide-save-state").textContent = "ошибка: " + e.message;
+    }
+  }
+
+  function renderIdeTabs() {
+    const box = $("ide-file-tabs");
+    box.innerHTML = "";
+    ide.open.forEach((t) => {
+      const el = document.createElement("div");
+      el.className = "ide-file-tab" + (ide.active === t.path ? " active" : "") + (t.dirty ? " dirty" : "");
+      el.innerHTML = `<span class="dot-save"></span><span>${escapeHtml(t.name)}</span><span class="x">✕</span>`;
+      el.onclick = (ev) => {
+        if (ev.target.classList.contains("x")) { closeIdeTab(t.path); return; }
+        ide.active = t.path;
+        openIdeFile(t.path);
+      };
+      box.appendChild(el);
+    });
+  }
+
+  function closeIdeTab(path) {
+    const idx = ide.open.findIndex((t) => t.path === path);
+    if (idx >= 0) ide.open.splice(idx, 1);
+    if (ide.active === path) {
+      ide.active = ide.open.length ? ide.open[ide.open.length - 1].path : null;
+      if (ide.active) openIdeFile(ide.active);
+      else {
+        ide.editor.setValue("");
+        $("ide-welcome").style.display = "";
+        renderIdeTabs();
+      }
+    } else {
+      renderIdeTabs();
+    }
+  }
+
+  async function saveActiveFile() {
+    if (!ide.active || !state.sessionId) return;
+    const t = ide.open.find((x) => x.path === ide.active);
+    if (!t) return;
+    $("ide-save-state").textContent = "сохраняю…";
+    try {
+      await api(`/api/ide/${state.sessionId}/file`, {
+        method: "PUT",
+        body: JSON.stringify({ path: t.path, content: ide.editor.getValue() }),
+      });
+      t.dirty = false;
+      renderIdeTabs();
+      $("ide-save-state").textContent = "сохранено " + t.name;
+      loadIdeTree();
+    } catch (e) {
+      $("ide-save-state").textContent = "ошибка: " + e.message;
+    }
+  }
+
+  function runActiveFile() {
+    if (!ide.active) return;
+    sendCommand("python3 " + ide.active + "\n");
+    switchView("term");
+  }
+
+  function ideCreate(kind) {
+    const name = prompt(kind === "file" ? "Имя нового файла:" : "Имя новой папки:");
+    if (!name) return;
+    const base = ide.active && ide.active.includes("/")
+      ? ide.active.slice(0, ide.active.lastIndexOf("/")) : "/home/student";
+    const path = base + "/" + name.trim();
+    if (kind === "file") {
+      openIdeFile(path).then(async () => {
+        await api(`/api/ide/${state.sessionId}/file`, {
+          method: "PUT", body: JSON.stringify({ path, content: "" }),
+        }).catch(() => {});
+        loadIdeTree();
+      });
+    } else {
+      api(`/api/ide/${state.sessionId}/mkdir`, {
+        method: "POST", body: JSON.stringify({ path }),
+      }).then(() => { ide.expanded.add(path); loadIdeTree(); }).catch((e) => alert(e.message));
+    }
+  }
+
+  function ideFileMenu(item, ev) {
+    const act = prompt(`Действие с «${item.name}»:\n1 — переименовать\n2 — удалить`, "1");
+    if (act === "1") {
+      const nn = prompt("Новое имя:", item.name);
+      if (!nn) return;
+      const dir = item.path.slice(0, item.path.lastIndexOf("/"));
+      api(`/api/ide/${state.sessionId}/rename`, {
+        method: "POST", body: JSON.stringify({ from: item.path, to: dir + "/" + nn }),
+      }).then(() => loadIdeTree()).catch((e) => alert(e.message));
+    } else if (act === "2") {
+      if (!confirm(`Удалить «${item.name}»?`)) return;
+      api(`/api/ide/${state.sessionId}/delete`, {
+        method: "POST", body: JSON.stringify({ path: item.path }),
+      }).then(() => { closeIdeTab(item.path); loadIdeTree(); }).catch((e) => alert(e.message));
+    }
+  }
+
+  /* ---------------- терминал переезжает между вкладками ---------------- */
+  function moveTerminalTo(hostId) {
+    const host = $(hostId);
+    if (!host || !state.term || !state.term.element) return;
+    if (state.term.element.parentNode !== host) {
+      host.appendChild(state.term.element);
+      setTimeout(() => { try { state.fit.fit(); } catch (e) {} }, 80);
+    }
+  }
+
+  /* ---------------- вкладки Terminal / Web / IDE ---------------- */
+  function initTabs() {
+    document.querySelectorAll(".term-tab").forEach((tab) => {
+      tab.addEventListener("click", () => switchView(tab.dataset.view));
+    });
+    $("web-frame").addEventListener("load", () => refreshWebStatus());
+    $("web-reload").addEventListener("click", () => loadWeb());
+    $("web-path").addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); loadWeb(); }
+    });
+    $("web-port").addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); syncWebPort(); loadWeb(); }
+    });
+    $("web-port").addEventListener("input", syncWebPort);
+    $("web-port").addEventListener("change", () => { syncWebPort(); loadWeb(); });
+    $("web-auto").addEventListener("change", () => {
+      if ($("web-auto").checked) startWebAuto(); else stopWebAuto();
+    });
+  }
+
+  function webPort() {
+    return ($("web-port").value || "8080").trim() || "8080";
+  }
+
+  function syncWebPort() {
+    $("web-port-label").textContent = webPort();
+  }
+
+  function switchView(view) {
+    document.querySelectorAll(".term-tab").forEach((t) => {
+      t.classList.toggle("active", t.dataset.view === view);
+    });
+    $("view-term").hidden = view !== "term";
+    $("view-web").hidden = view !== "web";
+    $("view-ide").hidden = view !== "ide";
+    if (view === "web") {
+      loadWeb();
+      startWebAuto();
+    } else {
+      stopWebAuto();
+    }
+    if (view === "ide") {
+      moveTerminalTo("ide-term-host");
+      $("ide-panel").classList.remove("collapsed");
+      loadIdeTree();
+    } else {
+      moveTerminalTo("term-host");
+    }
+    setTimeout(() => { try { state.fit.fit(); } catch (e) {} }, 80);
+    if (view !== "ide") { try { state.term.focus(); } catch (e) {} }
+  }
+
+  let webTimer = null;
+
+  function startWebAuto() {
+    stopWebAuto();
+    webTimer = setInterval(() => {
+      if ($("view-web").hidden) return;
+      refreshWebStatus();
+      if ($("web-auto").checked) loadWeb(true);
+    }, 4000);
+  }
+
+  function stopWebAuto() {
+    if (webTimer) { clearInterval(webTimer); webTimer = null; }
+  }
+
+  async function refreshWebStatus() {
+    const st = $("web-status");
+    if (!state.sessionId) {
+      try { await ensureSession(); } catch (e) { st.textContent = "нет сессии"; st.className = "web-status err"; return; }
+    }
+    try {
+      const r = await api(`/api/web/${state.sessionId}/status?port=${encodeURIComponent(webPort())}`);
+      if (r.ok) {
+        st.textContent = `${r.code || "200"} OK${r.server ? " · " + r.server : ""}`;
+        st.className = "web-status ok";
+      } else {
+        st.textContent = "сервер не отвечает";
+        st.className = "web-status err";
+      }
+    } catch (e) {
+      st.textContent = "ошибка проверки";
+      st.className = "web-status err";
+    }
+  }
+
+  function loadWeb(quiet) {
+    if (!state.sessionId) {
+      ensureSession().then(() => loadWeb(quiet)).catch(() => {});
+      return;
+    }
+    const port = webPort();
+    const raw = ($("web-path").value || "/index.html").trim();
+    const p = raw.replace(/^\/+/, "");
+    const url = `/api/web/${state.sessionId}/proxy/${port}/${p}`;
+    const frame = $("web-frame");
+    if (!quiet) $("web-status").textContent = "загрузка…";
+    frame.src = url;
   }
 
   /* ---------------- ввод команд ---------------- */
@@ -478,12 +816,36 @@
 
   /* ---------------- старт ---------------- */
   async function boot() {
+    // 1) сначала критичные обработчики — даже если что-то сломается, интерфейс жив
+    bindUi();
     initTerminal();
     initInput();
     initSplitter();
     initNoCopy();
+    initTabs();
     applyLayout();
 
+    // 2) необязательные подсистемы — падение одной не ломает остальные
+    try { initIde(); } catch (e) { console.error("IDE:", e); }
+
+    try {
+      await loadCurriculum();
+      const last = localStorage.getItem("linuxlab.task");
+      const target = state.flatTasks.find((t) => t.id === last) || state.flatTasks[0];
+      if (target) await selectTask(target.id);
+    } catch (e) {
+      $("task-text").textContent = "Не удалось загрузить курс: " + e.message;
+    }
+
+    try {
+      await ensureSession();
+      state.ready = true;
+    } catch (e) {
+      state.term.write("\n[ не удалось запустить контейнер: " + e.message + " ]\n");
+    }
+  }
+
+  function bindUi() {
     $("btn-tasks").onclick = openDrawer;
     $("btn-close-drawer").onclick = closeDrawer;
     $("overlay").onclick = closeDrawer;
@@ -510,22 +872,6 @@
       await loadCurriculum();
       $("check-status").textContent = "Прогресс сброшен";
     };
-
-    try {
-      await loadCurriculum();
-      const last = localStorage.getItem("linuxlab.task");
-      const target = state.flatTasks.find((t) => t.id === last) || state.flatTasks[0];
-      if (target) await selectTask(target.id);
-    } catch (e) {
-      $("task-text").textContent = "Не удалось загрузить курс: " + e.message;
-    }
-
-    try {
-      await ensureSession();
-      state.ready = true;
-    } catch (e) {
-      state.term.write("\n[ не удалось запустить контейнер: " + e.message + " ]\n");
-    }
   }
 
   document.addEventListener("DOMContentLoaded", boot);

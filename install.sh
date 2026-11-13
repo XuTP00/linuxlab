@@ -28,6 +28,8 @@ APP_PORT="${APP_PORT:-8080}"
 HTTP_PORT="${HTTP_PORT:-80}"
 ADMIN_PASSWORD="${LINUXLAB_ADMIN_PASSWORD:-1541685}"
 UNLOCK_TTL="${LINUXLAB_UNLOCK_TTL:-28800}"
+WEB_PORT="${LINUXLAB_WEB_PORT:-8080}"     # порт веб-сервера ученика во вкладке Web
+IDE_ROOT="${LINUXLAB_IDE_ROOT:-/home/student}"  # корень проводника во вкладке IDE
 SERVICE_USER="${SERVICE_USER:-}"
 LOG_PREFIX="[linuxlab]"
 
@@ -249,6 +251,8 @@ Environment="LINUXLAB_DATA=$DATA_DIR"
 Environment="LINUXLAB_IMAGE=$IMAGE"
 Environment="LINUXLAB_ADMIN_PASSWORD=$ADMIN_PASSWORD"
 Environment="LINUXLAB_UNLOCK_TTL=$UNLOCK_TTL"
+Environment="LINUXLAB_WEB_PORT=$WEB_PORT"
+Environment="LINUXLAB_IDE_ROOT=$IDE_ROOT"
 Environment="PYTHONUNBUFFERED=1"
 ExecStart=$APP_DIR/venv/bin/uvicorn app.main:app --host 127.0.0.1 --port $APP_PORT --workers 1 --proxy-headers
 Restart=always
@@ -354,6 +358,65 @@ for _ in $(seq 1 30); do
 done
 [ -n "$HEALTH" ] || die "сервис не отвечает на http://127.0.0.1:$APP_PORT/api/health — смотрите: journalctl -u linuxlab"
 
+# ---------------------------------------------------------------------------
+# 10. Самопроверка: файлы интерфейса, курс, образ и API
+# ---------------------------------------------------------------------------
+info "самопроверка"
+
+MISSING=""
+for f in \
+  "app/static/index.html" \
+  "app/static/css/app.css" \
+  "app/static/css/ide.css" \
+  "app/static/js/app.js" \
+  "app/static/vendor/xterm.js" \
+  "app/static/vendor/addon-fit.js" \
+  "app/static/vendor/cm/codemirror.js" \
+  "app/static/vendor/cm/codemirror.css" \
+  "app/static/vendor/cm/addon-simple.js" \
+  "deploy/Dockerfile.lab" \
+  "deploy/entrypoint.sh" \
+  "requirements.txt"
+do
+  [ -f "$APP_DIR/$f" ] || MISSING="$MISSING $f"
+done
+if [ -n "$MISSING" ]; then
+  warn "не хватает файлов:$MISSING"
+else
+  ok "файлы интерфейса на месте (включая редактор CodeMirror)"
+fi
+
+COURSE="$(APP_DIR="$APP_DIR" "$APP_DIR/venv/bin/python" - <<'PY' 2>/dev/null || true
+import os, sys
+sys.path.insert(0, os.environ.get("APP_DIR", "/opt/linuxlab"))
+try:
+    from app.curriculum import MODULES, TASKS
+    print(f"{len(MODULES)} {len(TASKS)}")
+except Exception:
+    print("0 0")
+PY
+)"
+MODULES_N="$(echo "$COURSE" | awk '{print $1}')"
+TASKS_N="$(echo "$COURSE" | awk '{print $2}')"
+if [ "${TASKS_N:-0}" -gt 0 ]; then
+  ok "курс загружается: $MODULES_N модулей, $TASKS_N заданий"
+else
+  warn "не удалось импортировать учебный контент — проверьте $APP_DIR/app/curriculum"
+fi
+
+IMG_OK="$(docker run --rm "$IMAGE" bash -lc 'ls /home/student/project 2>/dev/null | wc -l' 2>/dev/null | tail -1)"
+if [ "${IMG_OK:-0}" -gt 0 ]; then
+  ok "образ лаборатории готов (проект для IDE на месте)"
+else
+  warn "проверьте образ: docker run --rm $IMAGE ls /home/student/project"
+fi
+
+for ep in "/api/curriculum" "/api/health" "/api/protection"; do
+  CODE="$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$APP_PORT$ep" || echo 000)"
+  [ "$CODE" = "200" ] || warn "API $ep вернул $CODE"
+done
+ok "API отвечает"
+
 IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
 [ -n "$IP" ] || IP="<ip-сервера>"
 URL="http://$IP"
@@ -367,12 +430,16 @@ $(printf '%s' "$c_ok") LinuxLab установлен и работает$(printf
   Веб-интерфейс : $URL/
   API            : http://127.0.0.1:$APP_PORT/api/health
   Ответ         : $HEALTH
+  Курс          : $MODULES_N модулей, $TASKS_N заданий
 
   Код           : $APP_DIR
   Данные        : $DATA_DIR
   Образ         : $IMAGE
   Юнит          : linuxlab.service (systemctl status linuxlab)
   Пароль копир. : $ADMIN_PASSWORD (переменная LINUXLAB_ADMIN_PASSWORD)
+  Порт Web-вкладки: $WEB_PORT   IDE-проект: $IDE_ROOT/project
+
+  Вкладки       : Terminal · Web (предпросмотр сайта) · IDE (редактор кода)
 
   Перезапуск    : systemctl restart linuxlab
   Обновление    : cd $APP_DIR && sudo bash install.sh

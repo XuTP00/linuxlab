@@ -247,6 +247,53 @@ button{font-family:inherit}
 .xterm .xterm-viewport::-webkit-scrollbar-thumb{background:#263140;border-radius:6px}
 .xterm .xterm-screen{overflow:hidden}
 
+/* ---------- вкладки терминала / web ---------- */
+.term-tabs{display:flex;gap:4px;align-items:center}
+.term-tab{
+  background:transparent;border:1px solid transparent;border-bottom:none;color:var(--txt-dim);
+  padding:5px 12px;border-radius:7px 7px 0 0;cursor:pointer;font-size:12.5px;
+  font-family:var(--mono);transition:.15s color,.15s background;
+}
+.term-tab:hover{color:var(--txt)}
+.term-tab.active{
+  color:var(--accent);background:var(--bg);
+  border-color:var(--line);border-bottom-color:var(--bg);
+}
+.term-panel:has(.term-tab.active[data-view="web"]) .panel-head{background:var(--bg)}
+.term-panel:has(.term-tab.active[data-view="web"]) .term-tab.active{
+  border-bottom-color:var(--bg);
+}
+.term-views{flex:1 1 auto;min-height:0;display:flex}
+.term-view{flex:1 1 auto;min-height:0;display:flex;flex-direction:column}
+.term-view[hidden]{display:none}
+
+/* ---------- предпросмотр сайта ---------- */
+.web-bar{
+  flex:0 0 auto;display:flex;align-items:center;gap:8px;padding:7px 12px;
+  border-bottom:1px solid var(--line);background:var(--bg-2);
+}
+.web-url{
+  font-family:var(--mono);font-size:12px;color:#6f8092;background:var(--panel);
+  border:1px solid var(--line);border-radius:6px;padding:3px 9px;
+  display:inline-flex;align-items:center;gap:2px;
+}
+.web-url input{
+  width:52px;background:transparent;border:none;outline:none;color:var(--accent);
+  font-family:var(--mono);font-size:12px;text-align:right;
+}
+.web-bar input[type=text]{
+  flex:0 1 260px;background:var(--panel);border:1px solid var(--line-2);border-radius:6px;
+  color:var(--txt);font-family:var(--mono);font-size:12.5px;padding:5px 9px;outline:none;
+}
+.web-bar input[type=text]:focus{border-color:var(--accent-2)}
+.web-auto{display:flex;align-items:center;gap:4px;font-size:11.5px;color:var(--txt-dim);cursor:pointer}
+.web-status{margin-left:auto;font-size:11.5px;color:var(--txt-dim)}
+.web-status.ok{color:var(--accent)}
+.web-status.err{color:var(--err)}
+#web-frame{
+  flex:1 1 auto;width:100%;border:0;background:#0b1015;
+}
+
 @media (max-width:900px){
   .workbench.layout-h{flex-direction:column}
   .progress-block{max-width:none}

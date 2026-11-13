@@ -5,7 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>LinuxLab — курс по Linux</title>
 <link rel="stylesheet" href="/static/vendor/xterm.css">
+<link rel="stylesheet" href="/static/vendor/cm/codemirror.css">
 <link rel="stylesheet" href="/static/css/app.css">
+<link rel="stylesheet" href="/static/css/ide.css">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐧</text></svg>">
 </head>
 <body>
@@ -104,19 +106,91 @@
 
   <section class="panel term-panel">
     <div class="panel-head">
-      <div class="crumbs">
-        <span class="dot" id="term-dot"></span>
-        <span id="term-title">Терминал</span>
-        <span class="hint-keys">Ctrl+C — прервать · ↑/↓ — история · Ctrl+L — очистить</span>
+      <div class="term-tabs" id="term-tabs">
+        <button class="term-tab active" data-view="term">&gt;_ Terminal</button>
+        <button class="term-tab" data-view="web">🌐 Web <span id="web-port-label">8080</span></button>
+        <button class="term-tab" data-view="ide">🧩 IDE</button>
       </div>
       <div class="panel-head-right">
         <span class="badge" id="term-hint">student@linuxlab</span>
         <button class="btn icon" id="btn-clear" title="Очистить экран">⌫</button>
       </div>
     </div>
-    <div class="term-wrap">
-      <div id="terminal"></div>
-      <div class="term-hint" id="term-hint-line">Кликните по терминалу и печатайте — <b>Tab</b> дополняет, <b>↑/↓</b> история, <b>Ctrl+C</b> прерывает</div>
+    <div class="term-views">
+      <div class="term-view active" id="view-term">
+        <div class="term-wrap">
+          <div id="term-host"></div>
+          <div class="term-hint" id="term-hint-line">Кликните по терминалу и печатайте — <b>Tab</b> дополняет, <b>↑/↓</b> история, <b>Ctrl+C</b> прерывает</div>
+        </div>
+      </div>
+      <div class="term-view" id="view-web" hidden>
+        <div class="web-bar">
+          <span class="web-url">http://127.0.0.1:<input type="text" id="web-port" value="8080" size="5" title="порт веб-сервера в контейнере"></span>
+          <input type="text" id="web-path" value="/index.html" spellcheck="false" autocomplete="off" title="Путь внутри сайта">
+          <button class="btn" id="web-reload">Обновить</button>
+          <label class="web-auto"><input type="checkbox" id="web-auto" checked> авто</label>
+          <span class="web-status" id="web-status">—</span>
+        </div>
+        <iframe id="web-frame" title="Предпросмотр сайта из контейнера" sandbox="allow-same-origin"></iframe>
+      </div>
+
+      <div class="term-view" id="view-ide" hidden>
+        <div class="ide">
+          <div class="ide-activity">
+            <button class="ide-act active" title="Проводник">🗂</button>
+            <button class="ide-act" title="Поиск">🔍</button>
+            <button class="ide-act" title="Система контроля версий">⑂</button>
+            <button class="ide-act" title="Запуск и отладка">▶</button>
+            <button class="ide-act" title="Расширения">🧩</button>
+          </div>
+
+          <div class="ide-sidebar">
+            <div class="ide-side-head">
+              <span>ПРОЕКТ</span>
+              <span class="ide-side-actions">
+                <button class="ide-mini" id="ide-new-file" title="Новый файл">＋</button>
+                <button class="ide-mini" id="ide-new-folder" title="Новая папка">🗀</button>
+                <button class="ide-mini" id="ide-refresh" title="Обновить">⟳</button>
+              </span>
+            </div>
+            <div class="ide-tree" id="ide-tree"></div>
+          </div>
+
+          <div class="ide-editor-area">
+            <div class="ide-menu">
+              <span>Файл</span><span>Правка</span><span>Выделение</span><span>Вид</span><span>Переход</span><span>Запуск</span>
+              <span class="ide-menu-right" id="ide-save-state">готово</span>
+            </div>
+            <div class="ide-tabs" id="ide-file-tabs"></div>
+            <div class="ide-editor" id="ide-editor">
+              <div class="ide-welcome" id="ide-welcome">
+                <div class="ide-welcome-logo">🧩</div>
+                <h3>LinuxLab IDE</h3>
+                <p>Слева — проводник файлов вашего контейнера (<code>/home/student</code>).<br>
+                Выберите файл, чтобы открыть его в редакторе. Ctrl+S — сохранить.</p>
+                <p class="ide-welcome-hint">Снизу — терминал: пишите код и запускайте его прямо здесь.</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="ide-panel" id="ide-panel">
+            <div class="ide-panel-tabs">
+              <span class="ide-panel-tab">ПРОБЛЕМЫ</span>
+              <span class="ide-panel-tab">ВЫВОД</span>
+              <span class="ide-panel-tab">ОТЛАДКА</span>
+              <span class="ide-panel-tab active">ТЕРМИНАЛ</span>
+              <span class="ide-panel-tab">ПОРТЫ</span>
+              <span class="ide-panel-right">
+                <button class="ide-mini" id="ide-panel-toggle" title="Свернуть/развернуть">⌃</button>
+                <button class="ide-mini" id="ide-panel-close" title="Закрыть">✕</button>
+              </span>
+            </div>
+            <div class="ide-panel-body" id="ide-panel-body">
+              <div class="ide-term-host" id="ide-term-host"></div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   </section>
 
@@ -124,6 +198,25 @@
 
 <script src="/static/vendor/xterm.js"></script>
 <script src="/static/vendor/addon-fit.js"></script>
+<script src="/static/vendor/cm/codemirror.js"></script>
+<script src="/static/vendor/cm/addon-simple.js"></script>
+<script src="/static/vendor/cm/mode-python.js"></script>
+<script src="/static/vendor/cm/mode-htmlmixed.js"></script>
+<script src="/static/vendor/cm/mode-xml.js"></script>
+<script src="/static/vendor/cm/mode-javascript.js"></script>
+<script src="/static/vendor/cm/mode-shell.js"></script>
+<script src="/static/vendor/cm/mode-clike.js"></script>
+<script src="/static/vendor/cm/mode-css.js"></script>
+<script src="/static/vendor/cm/mode-markdown.js"></script>
+<script src="/static/vendor/cm/mode-sql.js"></script>
+<script src="/static/vendor/cm/mode-php.js"></script>
+<script src="/static/vendor/cm/mode-yaml.js"></script>
+<script src="/static/vendor/cm/mode-dockerfile.js"></script>
+<script src="/static/vendor/cm/mode-nginx.js"></script>
+<script src="/static/vendor/cm/mode-lua.js"></script>
+<script src="/static/vendor/cm/mode-r.js"></script>
+<script src="/static/vendor/cm/mode-go.js"></script>
+<script src="/static/vendor/cm/mode-rust.js"></script>
 <script src="/static/js/app.js"></script>
 </body>
 </html>

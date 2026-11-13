@@ -62,15 +62,15 @@ MODULE = {
             "task": """Поднимите в фоне простейший веб-сервер:
 
 1. Создайте `~/site/index.html` с текстом `Hello from local server`.
-2. Запустите в фоне `python3 -m http.server 8080 --directory ~/site`.
-3. Скачайте страницу командой `curl http://127.0.0.1:8080` в файл `~/net/local.html`.""",
+2. Запустите в фоне `python3 -m http.server 8000 --directory ~/site`.
+3. Скачайте страницу командой `curl http://127.0.0.1:8000` в файл `~/net/local.html`.""",
             "goals": ["Локальный сервер", "Обращение к нему по HTTP", "Работа с портами"],
-            "hints": ["mkdir -p ~/site && echo 'Hello from local server' > ~/site/index.html", "python3 -m http.server 8080 --directory ~/site &", "curl -s http://127.0.0.1:8080 > ~/net/local.html"],
-            "solution": "mkdir -p ~/site ~/net && echo 'Hello from local server' > ~/site/index.html && (python3 -m http.server 8080 --directory ~/site >/dev/null 2>&1 &) && sleep 1 && curl -s http://127.0.0.1:8080 > ~/net/local.html",
+            "hints": ["mkdir -p ~/site && echo 'Hello from local server' > ~/site/index.html", "python3 -m http.server 8000 --directory ~/site &", "curl -s http://127.0.0.1:8000 > ~/net/local.html"],
+            "solution": "mkdir -p ~/site ~/net && echo 'Hello from local server' > ~/site/index.html && (python3 -m http.server 8000 --directory ~/site >/dev/null 2>&1 &) && sleep 1 && curl -s http://127.0.0.1:8000 > ~/net/local.html",
             "checks": [
                 fc("/home/student/site/index.html", "Hello from local server", "index.html создан"),
                 fc("/home/student/net/local.html", "Hello from local server", "curl получил страницу"),
-                port(8080, "Порт 8080 слушается"),
+                port(8000, "Порт 8000 слушается"),
             ],
         },
         {
@@ -80,12 +80,12 @@ MODULE = {
             "points": 15,
             "task": """Посмотрите, какие порты слушаются в системе (`ss -tuln` или `ss -ltnp`), и сохраните вывод в `~/net/ss.txt`.
 
-В выводе должен быть порт `8080` (сервер из прошлого задания всё ещё работает).""",
+В выводе должен быть порт `8000` (сервер из прошлого задания всё ещё работает).""",
             "goals": ["Активные сокеты", "netstat vs ss"],
             "hints": ["ss -tuln", "ss -tuln > ~/net/ss.txt", "-t — TCP, -u — UDP, -l — слушающие, -n — числовые порты"],
             "solution": "ss -tuln > ~/net/ss.txt",
             "checks": [
-                fc("/home/student/net/ss.txt", "8080", "Порт 8080 виден в списке"),
+                fc("/home/student/net/ss.txt", "8000", "Порт 8000 виден в списке"),
                 fne("/home/student/net/ss.txt", "Вывод непустой"),
             ],
         },
@@ -197,15 +197,15 @@ MODULE = {
             "title": "nc: проверяем порт",
             "difficulty": 5,
             "points": 20,
-            "task": """Проверьте утилитой `netcat`, что порт 8080 открыт, и сохраните вывод в `~/net/nc.txt`.
+            "task": """Проверьте утилитой `netcat`, что порт 8000 открыт, и сохраните вывод в `~/net/nc.txt`.
 
-Запустите проверку так: `nc -zv 127.0.0.1 8080` (сервер из задания про веб-сервер должен ещё работать; если нет — запустите его заново).""",
+Запустите проверку так: `nc -zv 127.0.0.1 8000` (сервер из задания про веб-сервер должен ещё работать; если нет — запустите его заново).""",
             "goals": ["Проверка доступности порта", "netcat как диагностика"],
-            "hints": ["nc -zv 127.0.0.1 8080", "nc -zv 127.0.0.1 8080 > ~/net/nc.txt 2>&1", "Ключ -z — не передавать данные, -v — подробно"],
-            "solution": "nc -zv 127.0.0.1 8080 > ~/net/nc.txt 2>&1",
+            "hints": ["nc -zv 127.0.0.1 8000", "nc -zv 127.0.0.1 8000 > ~/net/nc.txt 2>&1", "Ключ -z — не передавать данные, -v — подробно"],
+            "solution": "nc -zv 127.0.0.1 8000 > ~/net/nc.txt 2>&1",
             "checks": [
                 fne("/home/student/net/nc.txt", "Вывод непустой"),
-                fc("/home/student/net/nc.txt", "8080", "Упомянут порт 8080"),
+                fc("/home/student/net/nc.txt", "8000", "Упомянут порт 8000"),
             ],
         },
     ],

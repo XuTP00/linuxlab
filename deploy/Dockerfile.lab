@@ -59,6 +59,80 @@ RUN chmod +x /usr/local/bin/lab-entrypoint.sh \
     && su student -c 'git config --global user.name student' \
     && su student -c 'git config --global init.defaultBranch main'
 
+# --- рабочий проект для вкладки IDE ---
+RUN mkdir -p /home/student/project && \
+    printf '%s\n' \
+'# Проект ученика LinuxLab' \
+'' \
+'Это готовая рабочая папка. Откройте файлы во вкладке IDE справа,' \
+'меняйте код и запускайте его в терминале:' \
+'' \
+'```bash' \
+'cd ~/project' \
+'python3 -m http.server 8080' \
+'```' \
+'' \
+'После этого сайт будет виден во вкладке «Web 8080».' \
+> /home/student/project/README.md && \
+    printf '%s\n' \
+'<!DOCTYPE html>' \
+'<html lang="ru">' \
+'<head>' \
+'  <meta charset="utf-8">' \
+'  <title>Мой первый сайт</title>' \
+'  <link rel="stylesheet" href="style.css">' \
+'</head>' \
+'<body>' \
+'  <h1>Привет, LinuxLab!</h1>' \
+'  <p>Эту страницу отдаёт веб-сервер, запущенный прямо в контейнере.</p>' \
+'  <p><a href="/about.html">О проекте</a></p>' \
+'</body>' \
+'</html>' \
+> /home/student/project/index.html && \
+    printf '%s\n' \
+'<!DOCTYPE html>' \
+'<html lang="ru">' \
+'<head><meta charset="utf-8"><title>О проекте</title>' \
+'<link rel="stylesheet" href="style.css"></head>' \
+'<body><h1>О проекте</h1><p>Учебный проект в LinuxLab.</p>' \
+'<p><a href="/index.html">На главную</a></p></body></html>' \
+> /home/student/project/about.html && \
+    printf '%s\n' \
+'body {' \
+'  font-family: system-ui, sans-serif;' \
+'  background: #101820;' \
+'  color: #e6edf3;' \
+'  margin: 0;' \
+'  padding: 40px;' \
+'}' \
+'h1 { color: #3fb950; }' \
+'a { color: #58a6ff; }' \
+> /home/student/project/style.css && \
+    printf '%s\n' \
+'#!/usr/bin/env python3' \
+'"""Мини-приложение: проверяем, что Python и сервер работают."""' \
+'' \
+'from http.server import BaseHTTPRequestHandler, HTTPServer' \
+'' \
+'PAGE = b"<h1>Hello from Python backend</h1>"' \
+'' \
+'' \
+'class Handler(BaseHTTPRequestHandler):' \
+'    def do_GET(self):' \
+'        self.send_response(200)' \
+'        self.send_header("Content-Type", "text/html; charset=utf-8")' \
+'        self.send_header("Content-Length", str(len(PAGE)))' \
+'        self.end_headers()' \
+'        self.wfile.write(PAGE)' \
+'' \
+'' \
+'if __name__ == "__main__":' \
+'    port = 8090' \
+'    print(f"Serving on http://127.0.0.1:{port}")' \
+'    HTTPServer(("127.0.0.1", port), Handler).serve_forever()' \
+> /home/student/project/app.py && \
+    chown -R student:student /home/student/project
+
 # --- восстанавливаем man-страницы coreutils и «настоящий» man вместо заглушки ---
 RUN apt-get update -qq \
     && apt-get install -y -qq --reinstall gnu-coreutils man-db >/dev/null 2>&1 || true

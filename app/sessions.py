@@ -194,17 +194,28 @@ class ShellSession:
             self.seq = 0
 
     # ---------- выполнение команд для проверок ----------
-    def exec_check(self, command: str, timeout: int = 30, user: str = "root", cwd: str = "/root") -> tuple[int, str, str]:
-        """Однократное выполнение команды в контейнере."""
+    def exec_check(self, command: str, timeout: int = 30, user: str = "root", cwd: str = "/root",
+                   binary: bool = False):
+        """Однократное выполнение команды в контейнере.
+
+        binary=True — вывод возвращается как bytes (для картинок и прочих бинарников).
+        """
         try:
+            if binary:
+                res = subprocess.run(
+                    ["docker", "exec", "-u", user, "-w", cwd,
+                     self.container, "bash", "-lc", command],
+                    capture_output=True, timeout=timeout,
+                )
+                return res.returncode, res.stdout, res.stderr
             res = subprocess.run(
                 ["docker", "exec", "-u", user, "-w", cwd,
                  self.container, "bash", "-lc", command],
-                capture_output=True, text=True, timeout=timeout,
+                capture_output=True, text=True, errors="replace", timeout=timeout,
             )
             return res.returncode, res.stdout, res.stderr
         except subprocess.TimeoutExpired:
-            return 124, "", "timeout"
+            return 124, (b"" if binary else ""), "timeout"
 
     def alive(self) -> bool:
         if not self.proc:

@@ -14,6 +14,8 @@ Environment="LINUXLAB_DATA=/var/lib/linuxlab"
 Environment="LINUXLAB_IMAGE=linuxlab/lab:latest"
 Environment="LINUXLAB_ADMIN_PASSWORD=1541685"
 Environment="LINUXLAB_UNLOCK_TTL=28800"
+Environment="LINUXLAB_WEB_PORT=8080"
+Environment="LINUXLAB_IDE_ROOT=/home/student"
 Environment="PYTHONUNBUFFERED=1"
 ExecStart=/opt/linuxlab/venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8080 --workers 1 --proxy-headers
 Restart=always
